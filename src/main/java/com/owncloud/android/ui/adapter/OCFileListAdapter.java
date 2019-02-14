@@ -24,7 +24,6 @@
 
 package com.owncloud.android.ui.adapter;
 
-import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.content.ContentValues;
 import android.content.Context;
@@ -52,6 +51,7 @@ import com.nextcloud.client.account.UserAccountManager;
 import com.nextcloud.client.preferences.AppPreferences;
 import com.owncloud.android.R;
 import com.owncloud.android.datamodel.FileDataStorageManager;
+import com.owncloud.android.datamodel.FileDataStorageManagerImpl;
 import com.owncloud.android.datamodel.OCFile;
 import com.owncloud.android.datamodel.ThumbnailsCacheManager;
 import com.owncloud.android.datamodel.VirtualFolderType;
@@ -753,7 +753,7 @@ public class OCFileListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHol
         }
 
         if (mStorageManager == null) {
-            mStorageManager = new FileDataStorageManager(user.toPlatformAccount(), mContext.getContentResolver());
+            mStorageManager = new FileDataStorageManagerImpl(user.toPlatformAccount(), mContext);
         }
 
         if (clear) {
@@ -819,7 +819,7 @@ public class OCFileListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHol
                 if (result.isSuccess()) {
                     OCFile file = FileStorageUtils.fillOCFile((RemoteFile) result.getData().get(0));
                     FileStorageUtils.searchForLocalFileInDefaultPath(file, user.toPlatformAccount());
-                    file = mStorageManager.saveFileWithParent(file, mContext);
+                    file = mStorageManager.saveFileWithParent(file);
 
                     ShareType newShareType = ocShare.getShareType();
                     if (newShareType == ShareType.PUBLIC_LINK) {
@@ -880,7 +880,7 @@ public class OCFileListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHol
                     mStorageManager.saveFile(ocFile);
                 } else {
 
-                    ocFile = mStorageManager.saveFileWithParent(ocFile, mContext);
+                    ocFile = mStorageManager.saveFileWithParent(ocFile);
 
                     // also sync folder content
                     if (ocFile.isFolder()) {

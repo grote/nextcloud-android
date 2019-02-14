@@ -69,6 +69,7 @@ import com.owncloud.android.authentication.PassCodeManager;
 import com.owncloud.android.datamodel.ArbitraryDataProvider;
 import com.owncloud.android.datamodel.ExternalLinksProvider;
 import com.owncloud.android.datamodel.FileDataStorageManager;
+import com.owncloud.android.datamodel.FileDataStorageManagerImpl;
 import com.owncloud.android.datamodel.OCFile;
 import com.owncloud.android.lib.common.ExternalLink;
 import com.owncloud.android.lib.common.ExternalLinkType;
@@ -367,8 +368,7 @@ public abstract class DrawerActivity extends ToolbarActivity
     }
 
     private void filterDrawerMenu(final Menu menu, @NonNull final User user) {
-            FileDataStorageManager storageManager = new FileDataStorageManager(user.toPlatformAccount(),
-                                                                               getContentResolver());
+        FileDataStorageManager storageManager = new FileDataStorageManagerImpl(user.toPlatformAccount(), this);
         OCCapability capability = storageManager.getCapability(user.getAccountName());
 
         boolean hasSearchSupport = user.getServer().getVersion().isSearchSupported();

@@ -23,7 +23,6 @@ package com.owncloud.android.operations;
 
 import android.text.TextUtils;
 
-import com.owncloud.android.datamodel.FileDataStorageManager;
 import com.owncloud.android.datamodel.OCFile;
 import com.owncloud.android.lib.common.OwnCloudClient;
 import com.owncloud.android.lib.common.operations.RemoteOperationResult;
@@ -131,7 +130,7 @@ public class RenameFileOperation extends SyncOperation {
                 // notify MediaScanner about removed file
                 getStorageManager().deleteFileInMediaScan(oldPath);
                 // notify to scan about new file
-                FileDataStorageManager.triggerMediaScan(newPath);
+                getStorageManager().triggerMediaScan(newPath);
             }
             // else - NOTHING: the link to the local file is kept although the local name
             // can't be updated

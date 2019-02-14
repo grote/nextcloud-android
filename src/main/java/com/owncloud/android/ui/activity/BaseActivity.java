@@ -14,10 +14,11 @@ import com.nextcloud.client.account.User;
 import com.nextcloud.client.account.UserAccountManager;
 import com.nextcloud.client.di.Injectable;
 import com.nextcloud.client.preferences.AppPreferences;
-import com.nextcloud.java.util.Optional;
 import com.nextcloud.client.preferences.DarkMode;
+import com.nextcloud.java.util.Optional;
 import com.owncloud.android.MainApp;
 import com.owncloud.android.datamodel.FileDataStorageManager;
+import com.owncloud.android.datamodel.FileDataStorageManagerImpl;
 import com.owncloud.android.datamodel.OCFile;
 import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.lib.resources.status.OCCapability;
@@ -156,7 +157,7 @@ public abstract class BaseActivity extends AppCompatActivity implements Injectab
         }
 
         if(currentAccount != null) {
-            storageManager = new FileDataStorageManager(currentAccount, getContentResolver());
+            storageManager = new FileDataStorageManagerImpl(currentAccount, this);
             capabilities = storageManager.getCapability(currentAccount.name);
         }
     }
