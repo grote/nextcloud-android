@@ -19,6 +19,7 @@ import com.owncloud.android.utils.FileStorageUtils;
 
 import org.apache.commons.httpclient.HttpStatus;
 import org.apache.commons.httpclient.methods.GetMethod;
+import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.runner.RunWith;
@@ -85,6 +86,12 @@ public abstract class AbstractIT {
         } catch (AccountUtils.AccountNotFoundException e) {
             e.printStackTrace();
         }
+    }
+
+    @AfterClass
+    public static void tearDown() {
+        UserAccountManager accountManager = UserAccountManagerImpl.fromContext(targetContext);
+        accountManager.removeAllAccounts();
     }
 
     FileDataStorageManager getStorageManager() {
