@@ -101,6 +101,8 @@ steps:
 services:
   - name: server
     image: nextcloudci/server:server-11
+    environment:
+      EVAL: true
 
 trigger:
   branch:

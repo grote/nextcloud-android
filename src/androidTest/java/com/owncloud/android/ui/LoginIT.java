@@ -22,6 +22,7 @@
 package com.owncloud.android.ui;
 
 import android.Manifest;
+import android.accounts.Account;
 import android.content.Context;
 import android.os.Bundle;
 
@@ -49,6 +50,7 @@ import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static androidx.test.espresso.web.sugar.Web.onWebView;
 import static androidx.test.espresso.web.webdriver.DriverAtoms.findElement;
 import static androidx.test.espresso.web.webdriver.DriverAtoms.webClick;
+import static org.junit.Assert.assertEquals;
 
 
 @LargeTest
@@ -115,5 +117,17 @@ public class LoginIT {
             .perform(webClick());
 
         Thread.sleep(5 * 1000);
+
+        // check for account
+        Context targetContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        UserAccountManager accountManager = UserAccountManagerImpl.fromContext(targetContext);
+
+        assertEquals(1, accountManager.getAccounts().length);
+
+        Account account = accountManager.getAccounts()[0];
+
+        // account.name is loginName@baseUrl (without protocol)
+        assertEquals(loginName, account.name.split("@")[0]);
+        assertEquals(baseUrl.split("//")[1], account.name.split("@")[1]);
     }
 }
