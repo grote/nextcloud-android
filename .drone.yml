@@ -100,7 +100,7 @@ steps:
 
 services:
   - name: server
-    image: nextcloudci/server:server-11
+    image: nextcloudci/server:server-12
     environment:
       EVAL: true
 
