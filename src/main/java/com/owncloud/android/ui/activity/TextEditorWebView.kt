@@ -29,7 +29,7 @@ import androidx.annotation.RequiresApi
 @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
 class TextEditorWebView : EditorWebView() {
 
-    @SuppressLint("AddJavascriptInterface") // suppress warning as webview is only used >= Lollipop
+    @SuppressLint("AddJavascriptInterface")
     // suppress warning as webview is only used >= Lollipop
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

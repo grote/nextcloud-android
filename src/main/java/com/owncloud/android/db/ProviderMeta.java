@@ -47,6 +47,8 @@ public class ProviderMeta {
         public static final String ARBITRARY_DATA_TABLE_NAME = "arbitrary_data";
         public static final String VIRTUAL_TABLE_NAME = "virtual";
         public static final String FILESYSTEM_TABLE_NAME = "filesystem";
+        public static final String EDITORS_TABLE_NAME = "editors";
+        public static final String CREATORS_TABLE_NAME = "creators";
 
         private static final String CONTENT_PREFIX = "content://";
 
