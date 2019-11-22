@@ -277,7 +277,7 @@ public class PreviewTextFragment extends FileFragment implements SearchView.OnQu
         }
     }
 
-    private Spanned getRenderedMarkdownText(Context context, String markdown) {
+    public static Spanned getRenderedMarkdownText(Context context, String markdown) {
         Prism4j prism4j = new Prism4j(new MarkwonGrammarLocator());
         Prism4jTheme prism4jTheme = Prism4jThemeDefault.create();
         TaskListDrawable drawable = new TaskListDrawable(Color.GRAY, Color.GRAY, Color.WHITE);

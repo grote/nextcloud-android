@@ -218,6 +218,7 @@ public class FileDataStorageManager {
         cv.put(ProviderTableMeta.FILE_OWNER_DISPLAY_NAME, file.getOwnerDisplayName());
         cv.put(ProviderTableMeta.FILE_NOTE, file.getNote());
         cv.put(ProviderTableMeta.FILE_SHAREES, new Gson().toJson(file.getSharees()));
+        cv.put(ProviderTableMeta.FILE_RICH_WORKSPACE, file.getRichWorkspace());
 
         boolean sameRemotePath = fileExists(file.getRemotePath());
         if (sameRemotePath ||
@@ -468,6 +469,7 @@ public class FileDataStorageManager {
         cv.put(ProviderTableMeta.FILE_OWNER_DISPLAY_NAME, folder.getOwnerDisplayName());
         cv.put(ProviderTableMeta.FILE_NOTE, folder.getNote());
         cv.put(ProviderTableMeta.FILE_SHAREES, new Gson().toJson(folder.getSharees()));
+        cv.put(ProviderTableMeta.FILE_RICH_WORKSPACE, folder.getRichWorkspace());
 
         return cv;
     }
@@ -508,6 +510,7 @@ public class FileDataStorageManager {
         cv.put(ProviderTableMeta.FILE_OWNER_DISPLAY_NAME, file.getOwnerDisplayName());
         cv.put(ProviderTableMeta.FILE_NOTE, file.getNote());
         cv.put(ProviderTableMeta.FILE_SHAREES, new Gson().toJson(file.getSharees()));
+        cv.put(ProviderTableMeta.FILE_RICH_WORKSPACE, file.getRichWorkspace());
 
         return cv;
     }
@@ -1006,6 +1009,7 @@ public class FileDataStorageManager {
             file.setOwnerId(c.getString(c.getColumnIndex(ProviderTableMeta.FILE_OWNER_ID)));
             file.setOwnerDisplayName(c.getString(c.getColumnIndex(ProviderTableMeta.FILE_OWNER_DISPLAY_NAME)));
             file.setNote(c.getString(c.getColumnIndex(ProviderTableMeta.FILE_NOTE)));
+            file.setRichWorkspace(c.getString(c.getColumnIndex(ProviderTableMeta.FILE_RICH_WORKSPACE)));
 
             String sharees = c.getString(c.getColumnIndex(ProviderTableMeta.FILE_SHAREES));
 
