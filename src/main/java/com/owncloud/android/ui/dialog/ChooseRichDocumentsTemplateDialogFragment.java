@@ -1,29 +1,28 @@
 /*
+ *
  * Nextcloud Android client application
  *
  * @author Tobias Kaminsky
- * @author Chris Narkiewicz
- *
- * Copyright (C) 2018 Tobias Kaminsky
- * Copyright (C) 2018 Nextcloud GmbH.
- * Copyright (C) 2019 Chris Narkiewicz <hello@ezaquarii.com>
+ * Copyright (C) 2019 Tobias Kaminsky
+ * Copyright (C) 2019 Nextcloud GmbH
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
 package com.owncloud.android.ui.dialog;
 
+import android.accounts.Account;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Dialog;
@@ -38,33 +37,31 @@ import android.view.Window;
 import android.view.WindowManager.LayoutParams;
 import android.widget.EditText;
 
-import com.nextcloud.android.lib.resources.directediting.DirectEditingObtainListOfTemplatesRemoteOperation;
 import com.nextcloud.client.account.CurrentAccountProvider;
-import com.nextcloud.client.account.User;
 import com.nextcloud.client.di.Injectable;
-import com.nextcloud.client.network.ClientFactory;
 import com.owncloud.android.MainApp;
 import com.owncloud.android.R;
 import com.owncloud.android.datamodel.OCFile;
+import com.owncloud.android.datamodel.Template;
 import com.owncloud.android.files.CreateFileFromTemplateOperation;
 import com.owncloud.android.files.FetchTemplateOperation;
-import com.owncloud.android.lib.common.Creator;
 import com.owncloud.android.lib.common.OwnCloudAccount;
 import com.owncloud.android.lib.common.OwnCloudClient;
 import com.owncloud.android.lib.common.OwnCloudClientManagerFactory;
-import com.owncloud.android.lib.common.Template;
-import com.owncloud.android.lib.common.TemplateList;
 import com.owncloud.android.lib.common.operations.RemoteOperationResult;
 import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.ui.activity.ExternalSiteWebView;
 import com.owncloud.android.ui.activity.RichDocumentsEditorWebView;
-import com.owncloud.android.ui.adapter.TemplateAdapter;
+import com.owncloud.android.ui.adapter.RichDocumentsTemplateAdapter;
 import com.owncloud.android.utils.DisplayUtils;
+import com.owncloud.android.utils.NextcloudServer;
 import com.owncloud.android.utils.ThemeUtils;
 
 import org.parceler.Parcels;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.inject.Inject;
 
@@ -79,21 +76,18 @@ import butterknife.ButterKnife;
 /**
  * Dialog to show templates for new documents/spreadsheets/presentations.
  */
-public class ChooseTemplateDialogFragment extends DialogFragment implements DialogInterface.OnClickListener,
-    TemplateAdapter.ClickListener, Injectable {
+public class ChooseRichDocumentsTemplateDialogFragment extends DialogFragment implements DialogInterface.OnClickListener,
+    RichDocumentsTemplateAdapter.ClickListener, Injectable {
 
     private static final String ARG_PARENT_FOLDER = "PARENT_FOLDER";
-    private static final String ARG_TEMPLATE = "TEMPLATE";
-    private static final String ARG_EDITOR = "EDITOR";
-    private static final String ARG_MIMETYPE = "MIMETYPE";
-    private static final String TAG = ChooseTemplateDialogFragment.class.getSimpleName();
+    private static final String ARG_TYPE = "TYPE";
+    private static final String TAG = ChooseRichDocumentsTemplateDialogFragment.class.getSimpleName();
     private static final String DOT = ".";
 
-    private TemplateAdapter adapter;
+    private RichDocumentsTemplateAdapter adapter;
     private OCFile parentFolder;
     private OwnCloudClient client;
-    @Inject CurrentAccountProvider currentUser;
-    @Inject ClientFactory clientFactory;
+    @Inject CurrentAccountProvider currentAccount;
 
     public enum Type {
         DOCUMENT,
@@ -107,13 +101,12 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
     @BindView(R.id.filename)
     EditText fileName;
 
-    public static ChooseTemplateDialogFragment newInstance(OCFile parentFolder, Creator creator) {
-        ChooseTemplateDialogFragment frag = new ChooseTemplateDialogFragment();
+    @NextcloudServer(max = 18) // will be removed in favor of generic direct editing
+    public static ChooseRichDocumentsTemplateDialogFragment newInstance(OCFile parentFolder, Type type) {
+        ChooseRichDocumentsTemplateDialogFragment frag = new ChooseRichDocumentsTemplateDialogFragment();
         Bundle args = new Bundle();
         args.putParcelable(ARG_PARENT_FOLDER, parentFolder);
-        args.putString(ARG_EDITOR, creator.getEditor());
-        args.putString(ARG_TEMPLATE, creator.getId());
-        args.putString(ARG_MIMETYPE, creator.getMimetype());
+        args.putString(ARG_TYPE, type.name());
         frag.setArguments(args);
         return frag;
 
@@ -147,9 +140,7 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
         int accentColor = ThemeUtils.primaryAccentColor(getContext());
 
         parentFolder = arguments.getParcelable(ARG_PARENT_FOLDER);
-        String editor = arguments.getString(ARG_EDITOR);
-        String template = arguments.getString(ARG_TEMPLATE);
-        String mimetype = arguments.getString(ARG_MIMETYPE);
+        Type type = Type.valueOf(arguments.getString(ARG_TYPE));
 
         // Inflate the layout for the dialog
         LayoutInflater inflater = activity.getLayoutInflater();
@@ -160,17 +151,18 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
         fileName.getBackground().setColorFilter(accentColor, PorterDuff.Mode.SRC_ATOP);
 
         try {
-            User user = currentUser.getUser();
-            client = clientFactory.create(user);
+            Account account = currentAccount.getCurrentAccount();
+            OwnCloudAccount ocAccount = new OwnCloudAccount(account, activity);
+            client = OwnCloudClientManagerFactory.getDefaultSingleton().getClientFor(ocAccount, getContext());
 
-            new FetchTemplateTask(this, client, editor, template).execute();
+            new FetchTemplateTask(this, client).execute(type);
         } catch (Exception e) {
             Log_OC.e(TAG, "Loading stream url not possible: " + e);
         }
 
         listView.setHasFixedSize(true);
         listView.setLayoutManager(new GridLayoutManager(activity, 2));
-        adapter = new TemplateAdapter(mimetype, this, getContext(), currentAccount);
+        adapter = new RichDocumentsTemplateAdapter(type, this, getContext(), currentAccount);
         listView.setAdapter(adapter);
 
         // Build the dialog
@@ -193,7 +185,7 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
         new CreateFileFromTemplateTask(this, client, template, path).execute();
     }
 
-    public void setTemplateList(TemplateList templateList) {
+    public void setTemplateList(List<Template> templateList) {
         adapter.setTemplateList(templateList);
         adapter.notifyDataSetChanged();
     }
@@ -219,11 +211,11 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
 
     private static class CreateFileFromTemplateTask extends AsyncTask<Void, Void, String> {
         private OwnCloudClient client;
-        private WeakReference<ChooseTemplateDialogFragment> chooseTemplateDialogFragmentWeakReference;
+        private WeakReference<ChooseRichDocumentsTemplateDialogFragment> chooseTemplateDialogFragmentWeakReference;
         private Template template;
         private String path;
 
-        CreateFileFromTemplateTask(ChooseTemplateDialogFragment chooseTemplateDialogFragment, OwnCloudClient client,
+        CreateFileFromTemplateTask(ChooseRichDocumentsTemplateDialogFragment chooseTemplateDialogFragment, OwnCloudClient client,
                                    Template template, String path) {
             this.client = client;
             this.chooseTemplateDialogFragmentWeakReference = new WeakReference<>(chooseTemplateDialogFragment);
@@ -244,7 +236,7 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
 
         @Override
         protected void onPostExecute(String url) {
-            ChooseTemplateDialogFragment fragment = chooseTemplateDialogFragmentWeakReference.get();
+            ChooseRichDocumentsTemplateDialogFragment fragment = chooseTemplateDialogFragmentWeakReference.get();
 
             if (fragment != null) {
                 if (url.isEmpty()) {
@@ -265,46 +257,44 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
         }
     }
 
-    private static class FetchTemplateTask extends AsyncTask<Void, Void, TemplateList> {
+    private static class FetchTemplateTask extends AsyncTask<Type, Void, List<Template>> {
 
         private OwnCloudClient client;
-        private WeakReference<ChooseTemplateDialogFragment> chooseTemplateDialogFragmentWeakReference;
-        private String editor;
-        private String template;
+        private WeakReference<ChooseRichDocumentsTemplateDialogFragment> chooseTemplateDialogFragmentWeakReference;
 
-        FetchTemplateTask(ChooseTemplateDialogFragment chooseTemplateDialogFragment,
-                          OwnCloudClient client,
-                          String editor,
-                          String template) {
+        FetchTemplateTask(ChooseRichDocumentsTemplateDialogFragment chooseTemplateDialogFragment, OwnCloudClient client) {
             this.client = client;
             this.chooseTemplateDialogFragmentWeakReference = new WeakReference<>(chooseTemplateDialogFragment);
-            this.editor = editor;
-            this.template = template;
         }
 
         @Override
-        protected TemplateList doInBackground(Void... voids) {
-            RemoteOperationResult result = new DirectEditingObtainListOfTemplatesRemoteOperation(editor, template)
-                .execute(client);
+        protected List<Template> doInBackground(Type... type) {
+            FetchTemplateOperation fetchTemplateOperation = new FetchTemplateOperation(type[0]);
+            RemoteOperationResult result = fetchTemplateOperation.execute(client);
 
             if (!result.isSuccess()) {
-                return new TemplateList();
+                return new ArrayList<>();
             }
 
-            return (TemplateList) result.getSingleData();
+            List<Template> templateList = new ArrayList<>();
+            for (Object object : result.getData()) {
+                templateList.add((Template) object);
+            }
+
+            return templateList;
         }
 
         @Override
-        protected void onPostExecute(TemplateList templateList) {
-            ChooseTemplateDialogFragment fragment = chooseTemplateDialogFragmentWeakReference.get();
+        protected void onPostExecute(List<Template> templateList) {
+            ChooseRichDocumentsTemplateDialogFragment fragment = chooseTemplateDialogFragmentWeakReference.get();
 
             if (fragment != null) {
-                if (templateList.templates.isEmpty()) {
+                if (templateList.isEmpty()) {
                     DisplayUtils.showSnackMessage(fragment.listView, R.string.error_retrieving_templates);
                 } else {
                     fragment.setTemplateList(templateList);
 
-                    String name = DOT + templateList.templates.values().iterator().next().getExtension();
+                    String name = DOT + templateList.get(0).getExtension();
                     fragment.fileName.setText(name);
                 }
             } else {
