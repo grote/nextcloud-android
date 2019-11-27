@@ -25,6 +25,7 @@ package com.owncloud.android.ui.activity;
 import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.text.TextUtils;
@@ -35,15 +36,20 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.bumptech.glide.Glide;
 import com.google.android.material.snackbar.Snackbar;
 import com.owncloud.android.R;
 import com.owncloud.android.datamodel.OCFile;
 import com.owncloud.android.datamodel.ThumbnailsCacheManager;
+import com.owncloud.android.lib.common.Template;
 import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.ui.asynctasks.LoadUrlTask;
 import com.owncloud.android.utils.DisplayUtils;
 import com.owncloud.android.utils.MimeTypeUtil;
 import com.owncloud.android.utils.ThemeUtils;
+import com.owncloud.android.utils.glide.CustomGlideStreamLoader;
+
+import org.parceler.Parcels;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -132,9 +138,24 @@ public abstract class EditorWebView extends ExternalSiteWebView {
         initLoadingScreen();
     }
 
+    // TODO really here?
     protected void initLoadingScreen() {
-        setThumbnail(file, thumbnail);
-        fileName.setText(file.getFileName());
+        if (file == null) {
+            fileName.setText(R.string.create_file_from_template);
+
+            Template template = Parcels.unwrap(getIntent().getParcelableExtra(EXTRA_TEMPLATE));
+            Drawable placeholder = MimeTypeUtil.getFileTypeIcon(template.getExtension(),
+                                                                template.getExtension(),
+                                                                this);
+
+            Glide.with(this).using(new CustomGlideStreamLoader(accountManager)).load(template.getPreview())
+                .placeholder(placeholder)
+                .error(placeholder)
+                .into(thumbnail);
+        } else {
+            setThumbnail(file, thumbnail);
+            fileName.setText(file.getFileName());
+        }
     }
 
     private void openShareDialog() {

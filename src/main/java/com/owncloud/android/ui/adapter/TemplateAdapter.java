@@ -51,7 +51,7 @@ import butterknife.ButterKnife;
  */
 public class TemplateAdapter extends RecyclerView.Adapter<TemplateAdapter.ViewHolder> {
 
-    private TemplateList templateList;
+    private TemplateList templateList = new TemplateList();
     private ClickListener clickListener;
     private Context context;
     private CurrentAccountProvider currentAccountProvider;

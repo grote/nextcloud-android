@@ -38,6 +38,7 @@ import android.view.Window;
 import android.view.WindowManager.LayoutParams;
 import android.widget.EditText;
 
+import com.nextcloud.android.lib.resources.directediting.DirectEditingCreateFileRemoteOperation;
 import com.nextcloud.android.lib.resources.directediting.DirectEditingObtainListOfTemplatesRemoteOperation;
 import com.nextcloud.client.account.CurrentAccountProvider;
 import com.nextcloud.client.account.User;
@@ -57,7 +58,7 @@ import com.owncloud.android.lib.common.TemplateList;
 import com.owncloud.android.lib.common.operations.RemoteOperationResult;
 import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.ui.activity.ExternalSiteWebView;
-import com.owncloud.android.ui.activity.RichDocumentsEditorWebView;
+import com.owncloud.android.ui.activity.TextEditorWebView;
 import com.owncloud.android.ui.adapter.TemplateAdapter;
 import com.owncloud.android.utils.DisplayUtils;
 import com.owncloud.android.utils.ThemeUtils;
@@ -86,14 +87,16 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
     private static final String ARG_TEMPLATE = "TEMPLATE";
     private static final String ARG_EDITOR = "EDITOR";
     private static final String ARG_MIMETYPE = "MIMETYPE";
+    private static final String ARG_CREATOR = "CREATOR";
     private static final String TAG = ChooseTemplateDialogFragment.class.getSimpleName();
     private static final String DOT = ".";
 
     private TemplateAdapter adapter;
     private OCFile parentFolder;
     private OwnCloudClient client;
-    @Inject CurrentAccountProvider currentUser;
     @Inject ClientFactory clientFactory;
+    private Creator creator;
+    @Inject CurrentAccountProvider currentAccount;
 
     public enum Type {
         DOCUMENT,
@@ -111,9 +114,7 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
         ChooseTemplateDialogFragment frag = new ChooseTemplateDialogFragment();
         Bundle args = new Bundle();
         args.putParcelable(ARG_PARENT_FOLDER, parentFolder);
-        args.putString(ARG_EDITOR, creator.getEditor());
-        args.putString(ARG_TEMPLATE, creator.getId());
-        args.putString(ARG_MIMETYPE, creator.getMimetype());
+        args.putParcelable(ARG_CREATOR, creator);
         frag.setArguments(args);
         return frag;
 
@@ -147,9 +148,7 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
         int accentColor = ThemeUtils.primaryAccentColor(getContext());
 
         parentFolder = arguments.getParcelable(ARG_PARENT_FOLDER);
-        String editor = arguments.getString(ARG_EDITOR);
-        String template = arguments.getString(ARG_TEMPLATE);
-        String mimetype = arguments.getString(ARG_MIMETYPE);
+        creator = arguments.getParcelable(ARG_CREATOR);
 
         // Inflate the layout for the dialog
         LayoutInflater inflater = activity.getLayoutInflater();
@@ -163,14 +162,14 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
             User user = currentUser.getUser();
             client = clientFactory.create(user);
 
-            new FetchTemplateTask(this, client, editor, template).execute();
+            new FetchTemplateTask(this, client, creator).execute();
         } catch (Exception e) {
             Log_OC.e(TAG, "Loading stream url not possible: " + e);
         }
 
         listView.setHasFixedSize(true);
         listView.setLayoutManager(new GridLayoutManager(activity, 2));
-        adapter = new TemplateAdapter(mimetype, this, getContext(), currentAccount);
+        adapter = new TemplateAdapter(creator.getMimetype(), this, getContext(), currentAccount);
         listView.setAdapter(adapter);
 
         // Build the dialog
@@ -190,7 +189,7 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
     }
 
     private void createFromTemplate(Template template, String path) {
-        new CreateFileFromTemplateTask(this, client, template, path).execute();
+        new CreateFileFromTemplateTask(this, client, template, path, creator).execute();
     }
 
     public void setTemplateList(TemplateList templateList) {
@@ -222,18 +221,29 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
         private WeakReference<ChooseTemplateDialogFragment> chooseTemplateDialogFragmentWeakReference;
         private Template template;
         private String path;
+        private Creator creator;
 
-        CreateFileFromTemplateTask(ChooseTemplateDialogFragment chooseTemplateDialogFragment, OwnCloudClient client,
-                                   Template template, String path) {
+        CreateFileFromTemplateTask(ChooseTemplateDialogFragment chooseTemplateDialogFragment,
+                                   OwnCloudClient client,
+                                   Template template,
+                                   String path,
+                                   Creator creator
+        ) {
             this.client = client;
             this.chooseTemplateDialogFragmentWeakReference = new WeakReference<>(chooseTemplateDialogFragment);
             this.template = template;
             this.path = path;
+            this.creator = creator;
         }
 
         @Override
         protected String doInBackground(Void... voids) {
-            RemoteOperationResult result = new CreateFileFromTemplateOperation(path, template.getId()).execute(client);
+            RemoteOperationResult result =
+                new DirectEditingCreateFileRemoteOperation(path,
+                                                           creator.getEditor(),
+                                                           creator.getId(),
+                                                           template.getName())
+                    .execute(client);
 
             if (result.isSuccess()) {
                 return result.getData().get(0).toString();
@@ -250,12 +260,12 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
                 if (url.isEmpty()) {
                     DisplayUtils.showSnackMessage(fragment.listView, "Error creating file from template");
                 } else {
-                    Intent collaboraWebViewIntent = new Intent(MainApp.getAppContext(), RichDocumentsEditorWebView.class);
-                    collaboraWebViewIntent.putExtra(ExternalSiteWebView.EXTRA_TITLE, "Collabora");
-                    collaboraWebViewIntent.putExtra(ExternalSiteWebView.EXTRA_URL, url);
-                    collaboraWebViewIntent.putExtra(ExternalSiteWebView.EXTRA_SHOW_SIDEBAR, false);
-                    collaboraWebViewIntent.putExtra(ExternalSiteWebView.EXTRA_TEMPLATE, Parcels.wrap(template));
-                    fragment.startActivity(collaboraWebViewIntent);
+                    Intent editorWebView = new Intent(MainApp.getAppContext(), TextEditorWebView.class);
+                    editorWebView.putExtra(ExternalSiteWebView.EXTRA_TITLE, "Text");
+                    editorWebView.putExtra(ExternalSiteWebView.EXTRA_URL, url);
+                    editorWebView.putExtra(ExternalSiteWebView.EXTRA_SHOW_SIDEBAR, false);
+                    editorWebView.putExtra(ExternalSiteWebView.EXTRA_TEMPLATE, Parcels.wrap(template));
+                    fragment.startActivity(editorWebView);
 
                     fragment.dismiss();
                 }
@@ -269,22 +279,20 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
 
         private OwnCloudClient client;
         private WeakReference<ChooseTemplateDialogFragment> chooseTemplateDialogFragmentWeakReference;
-        private String editor;
-        private String template;
+        private Creator creator;
 
         FetchTemplateTask(ChooseTemplateDialogFragment chooseTemplateDialogFragment,
                           OwnCloudClient client,
-                          String editor,
-                          String template) {
+                          Creator creator) {
             this.client = client;
             this.chooseTemplateDialogFragmentWeakReference = new WeakReference<>(chooseTemplateDialogFragment);
-            this.editor = editor;
-            this.template = template;
+            this.creator = creator;
         }
 
         @Override
         protected TemplateList doInBackground(Void... voids) {
-            RemoteOperationResult result = new DirectEditingObtainListOfTemplatesRemoteOperation(editor, template)
+            RemoteOperationResult result = new DirectEditingObtainListOfTemplatesRemoteOperation(creator.getEditor(),
+                                                                                                 creator.getId())
                 .execute(client);
 
             if (!result.isSuccess()) {
