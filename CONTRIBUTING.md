@@ -315,7 +315,7 @@ elements.
 
 TL;DR Avoid Android platform APIs.
 
-NextCloud Android application provides some replacements for native Android APIs to facilitate testing
+Nextcloud Android application provides some replacements for native Android APIs to facilitate testing
 and expose higher-level, business-specific APIs.
 
 Generally, whenever you need:
