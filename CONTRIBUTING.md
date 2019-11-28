@@ -285,7 +285,7 @@ actively promote and encourage contributors to apply The Scout's Rule: *"Always 
 you found it"*. Simple, little improvements will sum up and will be very appreciated by Nextcloud team.
 
 We also promise to actively support and mentor contributors that help us to improve code quality, as we understand
-that this process is challenging and require deep understanding of the application codebase.
+that this process is challenging and requires deep understanding of the application codebase.
 
 ### Dependency injection
 
