@@ -685,6 +685,10 @@ public class OCFileListAdapter extends RecyclerView.Adapter<RecyclerView.ViewHol
     }
 
     private boolean shouldShowHeader() {
+        if (currentDirectory == null) {
+            return false;
+        }
+
         return !TextUtils.isEmpty(currentDirectory.getRichWorkspace());
     }
 
