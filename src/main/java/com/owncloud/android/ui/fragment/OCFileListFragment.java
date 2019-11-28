@@ -501,6 +501,11 @@ public class OCFileListFragment extends ExtendedListFragment implements
                 .show(requireActivity().getSupportFragmentManager(), DIALOG_CREATE_DOCUMENT);
     }
 
+    @Override
+    public void onHeaderClicked() {
+        mContainerActivity.getFileOperationsHelper().openFileWithTextEditor(getCurrentFile(), getContext());
+    }
+
     /**
      * Handler for multiple selection mode.
      * <p>
