@@ -89,7 +89,7 @@ import com.owncloud.android.ui.events.SearchEvent;
 import com.owncloud.android.ui.interfaces.OCFileListFragmentInterface;
 import com.owncloud.android.ui.preview.PreviewImageFragment;
 import com.owncloud.android.ui.preview.PreviewMediaFragment;
-import com.owncloud.android.ui.preview.PreviewTextFragment;
+import com.owncloud.android.ui.preview.PreviewTextFileFragment;
 import com.owncloud.android.utils.DisplayUtils;
 import com.owncloud.android.utils.EncryptionUtils;
 import com.owncloud.android.utils.FileSortOrder;
@@ -503,7 +503,7 @@ public class OCFileListFragment extends ExtendedListFragment implements
 
     @Override
     public void onHeaderClicked() {
-        mContainerActivity.getFileOperationsHelper().openFileWithTextEditor(getCurrentFile(), getContext());
+        ((FileDisplayActivity) mContainerActivity).startRichWorkspacePreview(getCurrentFile());
     }
 
     /**
@@ -935,7 +935,7 @@ public class OCFileListFragment extends ExtendedListFragment implements
                         }
                     } else if (file.isDown() && MimeTypeUtil.isVCard(file)) {
                         ((FileDisplayActivity) mContainerActivity).startContactListFragment(file);
-                    } else if (PreviewTextFragment.canBePreviewed(file)) {
+                    } else if (PreviewTextFileFragment.canBePreviewed(file)) {
                         ((FileDisplayActivity) mContainerActivity).startTextPreview(file, false);
                     } else if (file.isDown()) {
                         if (PreviewMediaFragment.canBePreviewed(file)) {
