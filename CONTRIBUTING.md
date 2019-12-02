@@ -330,7 +330,7 @@ Generally, whenever you need:
 
 we have something more suitable.
 
-Out transition to new APIs is a continuous process. Contributors might be asked by code reviewers to
+Our transition to new APIs is a continuous process. Contributors might be asked by code reviewers to
 refrain from  using specific Android APIs considered problematic and to use Nextcloud APIs instead.
 In extreme cases we might decide to put specific features on hold until we provide platform API
 replacement.
