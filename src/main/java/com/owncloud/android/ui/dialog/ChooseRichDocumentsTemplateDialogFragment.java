@@ -39,6 +39,7 @@ import android.widget.EditText;
 
 import com.nextcloud.client.account.CurrentAccountProvider;
 import com.nextcloud.client.di.Injectable;
+import com.nextcloud.client.network.ClientFactory;
 import com.owncloud.android.MainApp;
 import com.owncloud.android.R;
 import com.owncloud.android.datamodel.OCFile;
@@ -88,6 +89,7 @@ public class ChooseRichDocumentsTemplateDialogFragment extends DialogFragment im
     private OCFile parentFolder;
     private OwnCloudClient client;
     @Inject CurrentAccountProvider currentAccount;
+    @Inject ClientFactory clientFactory;
 
     public enum Type {
         DOCUMENT,
@@ -162,7 +164,7 @@ public class ChooseRichDocumentsTemplateDialogFragment extends DialogFragment im
 
         listView.setHasFixedSize(true);
         listView.setLayoutManager(new GridLayoutManager(activity, 2));
-        adapter = new RichDocumentsTemplateAdapter(type, this, getContext(), currentAccount);
+        adapter = new RichDocumentsTemplateAdapter(type, this, getContext(), currentAccount, clientFactory);
         listView.setAdapter(adapter);
 
         // Build the dialog

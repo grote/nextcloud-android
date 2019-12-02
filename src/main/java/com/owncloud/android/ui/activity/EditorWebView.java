@@ -148,7 +148,8 @@ public abstract class EditorWebView extends ExternalSiteWebView {
                                                                 template.getExtension(),
                                                                 this);
 
-            Glide.with(this).using(new CustomGlideStreamLoader(accountManager)).load(template.getPreview())
+            Glide.with(this).using(new CustomGlideStreamLoader(accountManager, clientFactory))
+                .load(template.getPreview())
                 .placeholder(placeholder)
                 .error(placeholder)
                 .into(thumbnail);

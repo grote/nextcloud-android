@@ -122,7 +122,8 @@ public class TemplateAdapter extends RecyclerView.Adapter<TemplateAdapter.ViewHo
                                                                 currentAccountProvider.getUser().toPlatformAccount(),
                                                                 context);
 
-            Glide.with(context).using(new CustomGlideStreamLoader(currentAccountProvider)).load(template.getPreview())
+            Glide.with(context).using(new CustomGlideStreamLoader(currentAccountProvider, clientFactory))
+                .load(template.getPreview())
                     .placeholder(placeholder)
                     .error(placeholder)
                     .into(thumbnail);

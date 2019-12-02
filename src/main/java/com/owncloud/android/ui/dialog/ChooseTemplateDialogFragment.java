@@ -47,12 +47,8 @@ import com.nextcloud.client.network.ClientFactory;
 import com.owncloud.android.MainApp;
 import com.owncloud.android.R;
 import com.owncloud.android.datamodel.OCFile;
-import com.owncloud.android.files.CreateFileFromTemplateOperation;
-import com.owncloud.android.files.FetchTemplateOperation;
 import com.owncloud.android.lib.common.Creator;
-import com.owncloud.android.lib.common.OwnCloudAccount;
 import com.owncloud.android.lib.common.OwnCloudClient;
-import com.owncloud.android.lib.common.OwnCloudClientManagerFactory;
 import com.owncloud.android.lib.common.Template;
 import com.owncloud.android.lib.common.TemplateList;
 import com.owncloud.android.lib.common.operations.RemoteOperationResult;
@@ -159,7 +155,7 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
         fileName.getBackground().setColorFilter(accentColor, PorterDuff.Mode.SRC_ATOP);
 
         try {
-            User user = currentUser.getUser();
+            User user = currentAccount.getUser();
             client = clientFactory.create(user);
 
             new FetchTemplateTask(this, client, creator).execute();
@@ -169,7 +165,7 @@ public class ChooseTemplateDialogFragment extends DialogFragment implements Dial
 
         listView.setHasFixedSize(true);
         listView.setLayoutManager(new GridLayoutManager(activity, 2));
-        adapter = new TemplateAdapter(creator.getMimetype(), this, getContext(), currentAccount);
+        adapter = new TemplateAdapter(creator.getMimetype(), this, getContext(), currentAccount, clientFactory);
         listView.setAdapter(adapter);
 
         // Build the dialog
