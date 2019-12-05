@@ -106,14 +106,14 @@ public class LoginIT {
 
         // click login
         onWebView()
-            .withElement(findElement(Locator.XPATH, "//input[@id='submit']"))
+            .withElement(findElement(Locator.XPATH, "//input[@id='submit-form']"))
             .perform(webClick());
 
         Thread.sleep(2000);
 
         // grant access
         onWebView()
-            .withElement(findElement(Locator.XPATH, "//input[@id='submit']"))
+            .withElement(findElement(Locator.XPATH, "//input[@type='submit']"))
             .perform(webClick());
 
         Thread.sleep(5 * 1000);
