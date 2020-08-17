@@ -618,12 +618,14 @@ public class DocumentsStorageProvider extends DocumentsProvider {
             Document currentDocument = toDocument(documentId);
             Document parentDocument = toDocument(parentDocumentId);
 
-            while (!ROOT_PATH.equals(currentDocument.getRemotePath())) {
-                currentDocument = currentDocument.getParent();
-                if (parentDocument.getFile().equals(currentDocument.getFile())) {
-                    return true;
-                }
-            }
+            String childPath = currentDocument.getFile().getDecryptedRemotePath();
+            String parentPath = parentDocument.getFile().getDecryptedRemotePath();
+
+            // The alternative is to go up the folder hierarchy from currentDocument with getParent()
+            // until we arrive at parentDocument or the storage root.
+            // However, especially for long paths this is expensive and can take substantial time.
+            // The solution below uses paths and is faster by a factor of 2-10 depending on the nesting level of child.
+            return parentDocument.getAccount() == currentDocument.getAccount() && childPath.startsWith(parentPath);
 
         } catch (FileNotFoundException e) {
             Log.e(TAG, "failed to check for child document", e);

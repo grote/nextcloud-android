@@ -172,7 +172,8 @@ public class DownloadFileOperation extends RemoteOperation {
             etag = downloadOperation.getEtag();
             newFile = new File(getSavePath());
             if (!newFile.getParentFile().mkdirs()) {
-                Log_OC.e(TAG, "Unable to create parent folder " + newFile.getParentFile().getAbsolutePath());
+                // File#mkdirs() also returns false when the directory already existed, so this not a hard error
+                Log_OC.d(TAG, "Unable to create parent folder " + newFile.getParentFile().getAbsolutePath());
             }
 
             // decrypt file
