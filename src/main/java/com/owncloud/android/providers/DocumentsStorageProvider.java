@@ -617,9 +617,13 @@ public class DocumentsStorageProvider extends DocumentsProvider {
         try {
             Document currentDocument = toDocument(documentId);
             Document parentDocument = toDocument(parentDocumentId);
+            OCFile childFile = currentDocument.getFile();
+            OCFile parentFile = parentDocument.getFile();
+            if (childFile == null) throw new FileNotFoundException("No child file with ID " + documentId);
+            if (parentFile == null) throw new FileNotFoundException("No parent file with ID " + parentDocumentId);
 
-            String childPath = currentDocument.getFile().getDecryptedRemotePath();
-            String parentPath = parentDocument.getFile().getDecryptedRemotePath();
+            String childPath = childFile.getDecryptedRemotePath();
+            String parentPath = parentFile.getDecryptedRemotePath();
 
             // The alternative is to go up the folder hierarchy from currentDocument with getParent()
             // until we arrive at parentDocument or the storage root.
