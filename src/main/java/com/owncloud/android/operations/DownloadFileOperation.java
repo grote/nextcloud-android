@@ -38,6 +38,7 @@ import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.lib.resources.files.DownloadFileRemoteOperation;
 import com.owncloud.android.utils.EncryptionUtils;
 import com.owncloud.android.utils.FileStorageUtils;
+import com.owncloud.android.utils.MimeTypeUtil;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -176,9 +177,10 @@ public class DownloadFileOperation extends RemoteOperation {
                 Log_OC.d(TAG, "Unable to create parent folder " + newFile.getParentFile().getAbsolutePath());
             }
 
+            FileDataStorageManager fileDataStorageManager = new FileDataStorageManager(account, context.getContentResolver());
+
             // decrypt file
             if (file.isEncrypted() && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
-                FileDataStorageManager fileDataStorageManager = new FileDataStorageManager(account, context.getContentResolver());
 
                 OCFile parent = fileDataStorageManager.getFileByPath(file.getParentRemotePath());
 
@@ -209,11 +211,34 @@ public class DownloadFileOperation extends RemoteOperation {
             if (!moved) {
                 result = new RemoteOperationResult(RemoteOperationResult.ResultCode.LOCAL_STORAGE_NOT_MOVED);
             }
+            saveDownloadedFile(fileDataStorageManager);
         }
         Log_OC.i(TAG, "Download of " + file.getRemotePath() + " to " + getSavePath() + ": " +
                 result.getLogMessage());
 
         return result;
+    }
+
+    /**
+     * Updates the OC File after a successful download.
+     */
+    private void saveDownloadedFile(FileDataStorageManager storageManager) {
+        long syncDate = System.currentTimeMillis();
+        file.setLastSyncDateForProperties(syncDate);
+        file.setLastSyncDateForData(syncDate);
+        file.setUpdateThumbnailNeeded(true);
+        file.setModificationTimestamp(getModificationTimestamp());
+        file.setModificationTimestampAtLastSyncForData(getModificationTimestamp());
+        file.setEtag(getEtag());
+        file.setMimeType(getMimeType());
+        file.setStoragePath(getSavePath());
+        file.setFileLength(new File(getSavePath()).length());
+        file.setRemoteId(getFile().getRemoteId());
+        storageManager.saveFile(file);
+        if (MimeTypeUtil.isMedia(getMimeType())) {
+            FileDataStorageManager.triggerMediaScan(file.getStoragePath(), file);
+        }
+        storageManager.saveConflict(file, null);
     }
 
     public void cancel() {
