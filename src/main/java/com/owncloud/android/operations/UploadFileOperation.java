@@ -1285,6 +1285,7 @@ public class UploadFileOperation extends SyncOperation {
         if (file.fileExists()) {
             file = getStorageManager().getFileById(file.getFileId());
         }
+        if (file == null) return; // this can happen e.g. when the file gets deleted during upload
         long syncDate = System.currentTimeMillis();
         file.setLastSyncDateForData(syncDate);
 

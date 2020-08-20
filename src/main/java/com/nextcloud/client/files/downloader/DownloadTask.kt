@@ -71,7 +71,8 @@ class DownloadTask(
                 request.user.toPlatformAccount(),
                 contentResolver
             )
-            val file = saveDownloadedFile(op, storageManager)
+            // TODO saving is now done as part of DownloadFileOperation, revert?
+            val file = request.file // saveDownloadedFile(op, storageManager)
             return Result(file, true)
         } else {
             return Result(request.file, false)

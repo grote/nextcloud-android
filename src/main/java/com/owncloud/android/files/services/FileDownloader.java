@@ -63,7 +63,6 @@ import com.owncloud.android.ui.notifications.NotificationUtils;
 import com.owncloud.android.ui.preview.PreviewImageActivity;
 import com.owncloud.android.ui.preview.PreviewImageFragment;
 import com.owncloud.android.utils.ErrorMessageAdapter;
-import com.owncloud.android.utils.MimeTypeUtil;
 import com.owncloud.android.utils.ThemeUtils;
 
 import java.io.File;
@@ -462,9 +461,6 @@ public class FileDownloader extends Service
 
                     /// perform the download
                     downloadResult = mCurrentDownload.execute(mDownloadClient);
-                    if (downloadResult.isSuccess()) {
-                        saveDownloadedFile();
-                    }
 
                 } catch (Exception e) {
                     Log_OC.e(TAG, "Error downloading", e);
@@ -490,31 +486,6 @@ public class FileDownloader extends Service
         }
     }
 
-
-    /**
-     * Updates the OC File after a successful download.
-     *
-     * TODO move to DownloadFileOperation
-     */
-    private void saveDownloadedFile() {
-        OCFile file = mStorageManager.getFileById(mCurrentDownload.getFile().getFileId());
-        long syncDate = System.currentTimeMillis();
-        file.setLastSyncDateForProperties(syncDate);
-        file.setLastSyncDateForData(syncDate);
-        file.setUpdateThumbnailNeeded(true);
-        file.setModificationTimestamp(mCurrentDownload.getModificationTimestamp());
-        file.setModificationTimestampAtLastSyncForData(mCurrentDownload.getModificationTimestamp());
-        file.setEtag(mCurrentDownload.getEtag());
-        file.setMimeType(mCurrentDownload.getMimeType());
-        file.setStoragePath(mCurrentDownload.getSavePath());
-        file.setFileLength(new File(mCurrentDownload.getSavePath()).length());
-        file.setRemoteId(mCurrentDownload.getFile().getRemoteId());
-        mStorageManager.saveFile(file);
-        if (MimeTypeUtil.isMedia(mCurrentDownload.getMimeType())) {
-            FileDataStorageManager.triggerMediaScan(file.getStoragePath(), file);
-        }
-        mStorageManager.saveConflict(file, null);
-    }
 
     /**
      * Creates a status notification to show the download progress

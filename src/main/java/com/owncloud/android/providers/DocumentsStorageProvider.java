@@ -39,17 +39,17 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.ParcelFileDescriptor;
+import android.os.ParcelFileDescriptor.OnCloseListener;
 import android.provider.DocumentsContract;
 import android.provider.DocumentsProvider;
 import android.util.Log;
 import android.util.SparseArray;
-import android.widget.Toast;
 
 import com.nextcloud.client.account.User;
 import com.nextcloud.client.account.UserAccountManager;
-import com.nextcloud.client.account.UserAccountManagerImpl;
+import com.nextcloud.client.device.PowerManagementService;
+import com.nextcloud.client.network.ConnectivityService;
 import com.nextcloud.client.preferences.AppPreferences;
 import com.nextcloud.client.preferences.AppPreferencesImpl;
 import com.owncloud.android.MainApp;
@@ -58,7 +58,10 @@ import com.owncloud.android.datamodel.ArbitraryDataProvider;
 import com.owncloud.android.datamodel.FileDataStorageManager;
 import com.owncloud.android.datamodel.OCFile;
 import com.owncloud.android.datamodel.ThumbnailsCacheManager;
-import com.owncloud.android.files.services.FileDownloader;
+import com.owncloud.android.datamodel.UploadsStorageManager;
+import com.owncloud.android.datamodel.UploadsStorageManager.UploadStatus;
+import com.owncloud.android.db.OCUpload;
+import com.owncloud.android.files.services.FileUploader.NameCollisionPolicy;
 import com.owncloud.android.lib.common.OwnCloudAccount;
 import com.owncloud.android.lib.common.OwnCloudClient;
 import com.owncloud.android.lib.common.OwnCloudClientManagerFactory;
@@ -67,11 +70,13 @@ import com.owncloud.android.lib.common.utils.Log_OC;
 import com.owncloud.android.lib.resources.files.UploadFileRemoteOperation;
 import com.owncloud.android.operations.CopyFileOperation;
 import com.owncloud.android.operations.CreateFolderOperation;
+import com.owncloud.android.operations.DownloadFileOperation;
 import com.owncloud.android.operations.MoveFileOperation;
 import com.owncloud.android.operations.RefreshFolderOperation;
 import com.owncloud.android.operations.RemoveFileOperation;
 import com.owncloud.android.operations.RenameFileOperation;
 import com.owncloud.android.operations.SynchronizeFileOperation;
+import com.owncloud.android.operations.UploadFileOperation;
 import com.owncloud.android.ui.activity.ConflictsResolveActivity;
 import com.owncloud.android.ui.activity.SettingsActivity;
 import com.owncloud.android.utils.FileStorageUtils;
@@ -90,8 +95,14 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import javax.inject.Inject;
+
+import androidx.annotation.NonNull;
+import dagger.android.AndroidInjection;
+
 import static com.owncloud.android.datamodel.OCFile.PATH_SEPARATOR;
 import static com.owncloud.android.datamodel.OCFile.ROOT_PATH;
+import static com.owncloud.android.files.services.FileUploader.LOCAL_BEHAVIOUR_MOVE;
 
 @TargetApi(Build.VERSION_CODES.KITKAT)
 public class DocumentsStorageProvider extends DocumentsProvider {
@@ -100,7 +111,10 @@ public class DocumentsStorageProvider extends DocumentsProvider {
 
     private static final long CACHE_EXPIRATION = TimeUnit.MILLISECONDS.convert(1, TimeUnit.MINUTES);
 
-    UserAccountManager accountManager;
+    @Inject UserAccountManager accountManager;
+    @Inject UploadsStorageManager mUploadsStorageManager;
+    @Inject ConnectivityService connectivityService;
+    @Inject PowerManagementService powerManagementService;
 
     private static final String DOCUMENTID_SEPARATOR = "/";
     private static final int DOCUMENTID_PARTS = 2;
@@ -192,110 +206,150 @@ public class DocumentsStorageProvider extends DocumentsProvider {
 
         Document document = toDocument(documentId);
 
-        Context context = getContext();
-        if (context == null) {
-            throw new FileNotFoundException("Context may not be null!");
-        }
+        Context context = getNonNullContext();
 
         OCFile ocFile = document.getFile();
         Account account = document.getAccount();
         final User user = accountManager.getUser(account.name).orElseThrow(RuntimeException::new); // should exist
 
-        if (!ocFile.isDown()) {
-            Intent i = new Intent(getContext(), FileDownloader.class);
-            i.putExtra(FileDownloader.EXTRA_USER, user);
-            i.putExtra(FileDownloader.EXTRA_FILE, ocFile);
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                context.startForegroundService(i);
-            } else {
-                context.startService(i);
+        if (ocFile.isDown()) {
+            RemoteOperationResult result;
+            try {
+                // TODO why not document.getStorageManager() ?
+//                FileDataStorageManager storageManager = new FileDataStorageManager(user.toPlatformAccount(),
+//                                                                                   context.getContentResolver());
+                result = new SynchronizeFileOperation(ocFile, null, user, true, context)
+                    .execute(document.getStorageManager(), context);
+            } catch (Exception e) {
+                Log_OC.e(TAG, "Error synchronizing file", e);
+                throw new FileNotFoundException("Error synchronizing file: " + ocFile.getFileName());
+            }
+            if (result.getCode() == RemoteOperationResult.ResultCode.SYNC_CONFLICT) {
+                // TODO remove, throw instead?
+                // ISSUE 5: if the user is not running the app (this is a service!),
+                // this can be very intrusive; a notification should be preferred
+                Intent intent = ConflictsResolveActivity.createIntent(ocFile,
+                                                                      account,
+                                                                      Intent.FLAG_ACTIVITY_NEW_TASK,
+                                                                      context);
+                context.startActivity(intent);
+            } else if (!result.isSuccess()) {
+                Log_OC.e(TAG, result.toString());
+                throw new FileNotFoundException("Error synchronizing file: " + ocFile.getFileName());
             }
 
-            do {
-                if (!waitOrGetCancelled(cancellationSignal)) {
-                    throw new FileNotFoundException("File with id " + documentId + " not found!");
-                }
-                ocFile = document.getFile();
+            // TODO is this needed here and if so also below for the DownloadFileOperation?
+            //  The file is downloaded already, so why would we need to wait for it to finish saving?
 
-                if (ocFile == null) {
-                    throw new FileNotFoundException("File with id " + documentId + " not found!");
-                }
-            } while (!ocFile.isDown());
+            // block thread until file is saved
+            FileStorageUtils.checkIfFileFinishedSaving(ocFile);
         } else {
-            OCFile finalFile = ocFile;
-            Thread syncThread = new Thread(() -> {
-                try {
-                    FileDataStorageManager storageManager = new FileDataStorageManager(user.toPlatformAccount(),
-                                                                                       context.getContentResolver());
-                    RemoteOperationResult result = new SynchronizeFileOperation(finalFile, null, user,
-                                                                                true, context)
-                        .execute(storageManager, context);
-                    if (result.getCode() == RemoteOperationResult.ResultCode.SYNC_CONFLICT) {
-                        // ISSUE 5: if the user is not running the app (this is a service!),
-                        // this can be very intrusive; a notification should be preferred
-                        Intent intent = ConflictsResolveActivity.createIntent(finalFile,
-                                                                              user.toPlatformAccount(),
-                                                                              Intent.FLAG_ACTIVITY_NEW_TASK,
-                                                                              context);
-                        context.startActivity(intent);
-                    } else {
-                        FileStorageUtils.checkIfFileFinishedSaving(finalFile);
-                        if (!result.isSuccess()) {
-                            showToast();
-                        }
-                    }
-                } catch (Exception exception) {
-                    showToast();
-                }
-            });
-
-            syncThread.start();
-            try {
-                syncThread.join();
-            } catch (InterruptedException e) {
-                Log.e(TAG, "Failed to wait for thread to finish");
+            // TODO or use DownloadTask instead?
+            RemoteOperationResult result = new DownloadFileOperation(account, ocFile, context)
+                .execute(account, context);
+            if (!result.isSuccess()) {
+                Log_OC.e(TAG, result.toString());
+                throw new FileNotFoundException("Error downloading file: " + ocFile.getFileName());
             }
         }
 
         File file = new File(ocFile.getStoragePath());
         int accessMode = ParcelFileDescriptor.parseMode(mode);
-        boolean isWrite = mode.indexOf('w') != -1;
-
-        final OCFile oldFile = ocFile;
-        final OCFile newFile = ocFile;
+        boolean isWrite = accessMode != ParcelFileDescriptor.MODE_READ_ONLY;
 
         if (isWrite) {
+            // The calling thread is not guaranteed to have a Looper, so we can't block it with the OnCloseListener.
+            // Thus, we are unable to do a synchronous upload and have to start an asynchronous one.
+            Handler handler = new Handler(context.getMainLooper());
+            OnCloseListener listener = error -> {
+                if (error == null) {
+                    // As we can't upload the file synchronously, let's at least update its size here already.
+                    ocFile.setFileLength(file.length());
+                    document.getStorageManager().saveFile(ocFile);
+
+                    // TODO or use FileUploader, because it is easier and re-uses more existing code?
+                    //  contra: shows notification and doesn't handle fast file removal well
+//                // upload file with FileUploader service (off main thread)
+//                FileUploader.uploadUpdateFile(
+//                    context,
+//                    account,
+//                    ocFile,
+//                    LOCAL_BEHAVIOUR_MOVE,
+//                    NameCollisionPolicy.OVERWRITE
+//                );
+                    // TODO we might want to use dedicated threads for parallel uploads
+                    executor.execute(() -> {
+                        if (!file.exists()) return;
+                        // TODO do we need to handle that the parent folder might be encrypted?
+                        UploadFileOperation uploadFileOperation = getAndStartUploadFileOperation(user, document);
+                        RemoteOperationResult result = uploadFileOperation
+                            .execute(document.getClient(), document.getStorageManager());
+
+                        // TODO do we need to inform/involve the UploadsStorageManager at all, not only here?
+                        mUploadsStorageManager.updateDatabaseUploadResult(result, uploadFileOperation);
+
+                        if (result.isSuccess()) {
+                            // we notify about this change, but not even the OS DocumentProviders are doing it,
+                            // so this is probably a pointless exercise
+                            context.getContentResolver().notifyChange(toNotifyUri(document), null, false);
+                        } else {
+                            Log_OC.e(TAG, "Failed to upload document: " + ocFile.getFileName());
+                        }
+                    });
+                } else {
+                    Log_OC.e(TAG, "File was closed with an error: " + ocFile.getFileName(), error);
+                }
+            };
             try {
-                Handler handler = new Handler(context.getMainLooper());
-                return ParcelFileDescriptor.open(file, accessMode, handler, l -> {
-                    RemoteOperationResult result = new SynchronizeFileOperation(newFile, oldFile, user, true,
-                                                                                context)
-                        .execute(document.getClient(), document.getStorageManager());
-
-                    boolean success = result.isSuccess();
-
-                    if (!success) {
-                        Log_OC.e(TAG, "Failed to update document with id " + documentId);
-                    }
-                });
+                return ParcelFileDescriptor.open(file, accessMode, handler, listener);
             } catch (IOException e) {
-                throw new FileNotFoundException("Failed to open/edit document with id " + documentId);
+                throw new FileNotFoundException("Failed to open document for writing " + ocFile.getFileName());
             }
         } else {
             return ParcelFileDescriptor.open(file, accessMode);
         }
     }
 
-    private void showToast() {
-        Handler handler = new Handler(Looper.getMainLooper());
-        handler.post(() -> Toast.makeText(MainApp.getAppContext(),
-                R.string.file_not_synced,
-                Toast.LENGTH_SHORT).show());
+    private UploadFileOperation getAndStartUploadFileOperation(User user, Document document) {
+        NameCollisionPolicy nameCollisionPolicy = NameCollisionPolicy.OVERWRITE;
+        int localBehaviour = LOCAL_BEHAVIOUR_MOVE;
+
+        OCUpload ocUpload = new OCUpload(document.getFile(), document.getAccount());
+        ocUpload.setFileSize(document.getFile().getFileLength());
+        ocUpload.setNameCollisionPolicy(nameCollisionPolicy);
+        ocUpload.setCreateRemoteFolder(false);
+        ocUpload.setCreatedBy(UploadFileOperation.CREATED_BY_USER);
+        ocUpload.setLocalAction(localBehaviour);
+        ocUpload.setUseWifiOnly(false);
+        ocUpload.setWhileChargingOnly(false);
+        ocUpload.setUploadStatus(UploadStatus.UPLOAD_IN_PROGRESS);
+
+        UploadFileOperation uploadFileOperation = new UploadFileOperation(
+            mUploadsStorageManager,
+            connectivityService,
+            powerManagementService,
+            user,
+            document.getFile(),
+            ocUpload,
+            nameCollisionPolicy,
+            localBehaviour,
+            getNonNullContext(),
+            false,
+            false
+        );
+
+        // Save upload in database
+        long id = mUploadsStorageManager.storeUpload(ocUpload);
+        uploadFileOperation.setOCUploadId(id);
+        // Mark upload as started
+        mUploadsStorageManager.updateDatabaseUploadStart(uploadFileOperation);
+
+        return uploadFileOperation;
     }
 
     @Override
     public boolean onCreate() {
-        accountManager = UserAccountManagerImpl.fromContext(getContext());
+        AndroidInjection.inject(this);
 
         // initiate storage manager collection, because we need to serve document(tree)s
         // with persist permissions
@@ -346,6 +400,7 @@ public class DocumentsStorageProvider extends DocumentsProvider {
             .execute(document.getClient(), document.getStorageManager());
 
         if (!result.isSuccess()) {
+            Log_OC.e(TAG, result.toString());
             throw new FileNotFoundException("Failed to rename document with documentId " + documentId + ": " +
                                                 result.getException());
         }
@@ -373,6 +428,7 @@ public class DocumentsStorageProvider extends DocumentsProvider {
             .execute(document.getClient(), storageManager);
 
         if (!result.isSuccess()) {
+            Log_OC.e(TAG, result.toString());
             throw new FileNotFoundException("Failed to copy document with documentId " + sourceDocumentId
                                                 + " to " + targetParentDocumentId);
         }
@@ -385,6 +441,7 @@ public class DocumentsStorageProvider extends DocumentsProvider {
             .execute(targetFolder.getClient());
 
         if (!updateParent.isSuccess()) {
+            Log_OC.e(TAG, updateParent.toString());
             throw new FileNotFoundException("Failed to copy document with documentId " + sourceDocumentId
                                                 + " to " + targetParentDocumentId);
         }
@@ -418,6 +475,7 @@ public class DocumentsStorageProvider extends DocumentsProvider {
             .execute(document.getClient(), document.getStorageManager());
 
         if (!result.isSuccess()) {
+            Log_OC.e(TAG, result.toString());
             throw new FileNotFoundException("Failed to move document with documentId " + sourceDocumentId
                                                 + " to " + targetParentDocumentId);
         }
@@ -478,6 +536,7 @@ public class DocumentsStorageProvider extends DocumentsProvider {
             .execute(targetFolder.getClient(), storageManager);
 
         if (!result.isSuccess()) {
+            Log_OC.e(TAG, result.toString());
             throw new FileNotFoundException("Failed to create document with name " +
                                                 displayName + " and documentId " + targetFolder.getDocumentId());
         }
@@ -488,6 +547,7 @@ public class DocumentsStorageProvider extends DocumentsProvider {
             .execute(targetFolder.getClient());
 
         if (!updateParent.isSuccess()) {
+            Log_OC.e(TAG, updateParent.toString());
             throw new FileNotFoundException("Failed to create document with documentId " + targetFolder.getDocumentId());
         }
 
@@ -539,6 +599,7 @@ public class DocumentsStorageProvider extends DocumentsProvider {
             .execute(client);
 
         if (!result.isSuccess()) {
+            Log_OC.e(TAG, result.toString());
             throw new FileNotFoundException("Failed to upload document with path " + newFilePath);
         }
 
@@ -553,6 +614,7 @@ public class DocumentsStorageProvider extends DocumentsProvider {
             .execute(client);
 
         if (!updateParent.isSuccess()) {
+            Log_OC.e(TAG, updateParent.toString());
             throw new FileNotFoundException("Failed to create document with documentId " + targetFolder.getDocumentId());
         }
 
@@ -661,16 +723,6 @@ public class DocumentsStorageProvider extends DocumentsProvider {
         }
     }
 
-    private boolean waitOrGetCancelled(CancellationSignal cancellationSignal) {
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            return false;
-        }
-
-        return !(cancellationSignal != null && cancellationSignal.isCanceled());
-    }
-
     private List<Document> findFiles(Document root, String query) {
         FileDataStorageManager storageManager = root.getStorageManager();
         List<Document> result = new ArrayList<>();
@@ -702,6 +754,20 @@ public class DocumentsStorageProvider extends DocumentsProvider {
         }
 
         return new Document(storageManager, Long.parseLong(separated[1]));
+    }
+
+    /**
+     * Returns a {@link Context} guaranteed to be non-null.
+     *
+     * @throws IllegalStateException if called before {@link #onCreate()}.
+     */
+    @NonNull
+    private Context getNonNullContext() {
+        Context context = getContext();
+        if (context == null) {
+            throw new IllegalStateException();
+        }
+        return context;
     }
 
     public interface OnTaskFinishedCallback {
