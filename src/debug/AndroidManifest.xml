@@ -14,5 +14,10 @@
 
     <application
         android:testOnly="false"
-        tools:ignore="GoogleAppIndexingWarning"/>
+        tools:ignore="GoogleAppIndexingWarning">
+
+        <activity
+            android:name="com.owncloud.android.providers.TestActivity"/>
+
+    </application>
 </manifest>

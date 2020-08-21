@@ -512,7 +512,7 @@ public class DocumentsStorageProvider extends DocumentsProvider {
         if (DocumentsContract.Document.MIME_TYPE_DIR.equalsIgnoreCase(mimeType)) {
             return createFolder(folderDocument, displayName);
         } else {
-            return createFile(folderDocument, displayName);
+            return createFile(folderDocument, displayName, mimeType);
         }
     }
 
@@ -555,7 +555,7 @@ public class DocumentsStorageProvider extends DocumentsProvider {
         return newFolder.getDocumentId();
     }
 
-    private String createFile(Document targetFolder, String displayName) throws FileNotFoundException {
+    private String createFile(Document targetFolder, String displayName, String mimeType) throws FileNotFoundException {
         Context context = getContext();
         if (context == null) {
             throw new FileNotFoundException("Context may not be null!");
@@ -586,11 +586,13 @@ public class DocumentsStorageProvider extends DocumentsProvider {
 
         String newFilePath = targetFolder.getRemotePath() + displayName;
 
+        // FIXME we need to update the mimeType somewhere else as well
+
         // perform the upload, no need for chunked operation as we have a empty file
         OwnCloudClient client = targetFolder.getClient();
         RemoteOperationResult result = new UploadFileRemoteOperation(emptyFile.getAbsolutePath(),
                                                                      newFilePath,
-                                                                     null,
+                                                                     mimeType,
                                                                      "",
                                                                      String.valueOf(System.currentTimeMillis() / 1000))
             .execute(client);
@@ -653,6 +655,9 @@ public class DocumentsStorageProvider extends DocumentsProvider {
         if (!result.isSuccess()) {
             throw new FileNotFoundException("Failed to delete document with documentId " + documentId);
         }
+        // set the parentFolder as expired so queryChildDocuments can reload
+        // TODO do we need a RefreshFolderOperation as well?
+        parentFolder.setExpired();
         context.getContentResolver().notifyChange(toNotifyUri(parentFolder), null, false);
     }
 
@@ -859,6 +864,10 @@ public class DocumentsStorageProvider extends DocumentsProvider {
 
         boolean isExpired() {
             return getFile().getLastSyncDateForData() + CACHE_EXPIRATION < System.currentTimeMillis();
+        }
+
+        void setExpired() {
+            getFile().setLastSyncDateForData(0);
         }
 
         Document getParent() {
